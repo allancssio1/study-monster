@@ -1,6 +1,6 @@
-# Guia de Referência — TypeScript/NestJS · Python/FastAPI · Java/Spring · Go
+# Guia de Referência — TypeScript/NestJS · Python/FastAPI · Java/Spring · Go · PHP/Laravel · Terraform
 
-> Consulta rápida para o projeto ShopFlow. As quatro seções têm **a mesma ordem de tópicos** para facilitar a comparação.
+> Consulta rápida para o projeto ShopFlow. As seções de linguagem (1 a 5) têm **a mesma ordem de tópicos** para facilitar a comparação. A seção 6 (Terraform) é uma linguagem declarativa de infra e tem estrutura própria.
 > Os exemplos usam o domínio do projeto, mas são **trechos de sintaxe**, não a implementação.
 >
 > Arquitetura e roadmap: [`01-arquitetura-e-roadmap.md`](./01-arquitetura-e-roadmap.md)
@@ -12,6 +12,8 @@
 - [2. Python + FastAPI](#2-python--fastapi)
 - [3. Java + Spring Boot](#3-java--spring-boot)
 - [4. Go](#4-go)
+- [5. PHP + Laravel](#5-php--laravel)
+- [6. Terraform (HCL)](#6-terraform-hcl)
 
 Tópicos de cada seção: arquivo principal · ferramentas e comandos · variáveis e constantes · tipos · funções · classes e constructor · interfaces e herança · erros · async/concorrência · null-safety · módulos/imports · decorators/annotations · injeção de dependência · testes · Kafka e RabbitMQ.
 
@@ -19,33 +21,33 @@ Tópicos de cada seção: arquivo principal · ferramentas e comandos · variáv
 
 ## Tabela comparativa
 
-| Tópico | TypeScript / NestJS | Python / FastAPI | Java / Spring | Go |
-|---|---|---|---|---|
-| Arquivo principal | `src/main.ts` | `app/main.py` | `PaymentApplication.java` | `cmd/<app>/main.go` |
-| Gerenciador | npm / pnpm (`package.json`) | uv / pip (`pyproject.toml`) | Maven / Gradle (`pom.xml`) | go modules (`go.mod`) |
-| Rodar | `npm run start:dev` | `uv run fastapi dev app/main.py` | `./mvnw spring-boot:run` | `go run ./cmd/notification` |
-| Testar | `npm test` (Jest) | `uv run pytest` | `./mvnw test` (JUnit 5) | `go test ./...` |
-| Tipagem | Estática, estrutural, opcional em runtime | Dinâmica + type hints (checados por mypy/pyright) | Estática, nominal | Estática, estrutural nas interfaces |
-| Variável | `let x = 1` | `x = 1` | `int x = 1;` / `var x = 1;` | `x := 1` / `var x int = 1` |
-| Constante | `const X = 1` | `X: Final = 1` (convenção) | `static final int X = 1;` | `const X = 1` |
-| Função | `function f(a: number): number {}` | `def f(a: int) -> int:` | `int f(int a) {}` (dentro de classe) | `func f(a int) int {}` |
-| Lambda | `(a) => a * 2` | `lambda a: a * 2` | `a -> a * 2` | `func(a int) int { return a * 2 }` |
-| Classe | `class Order {}` | `class Order:` | `class Order {}` | não tem → `type Order struct {}` |
-| Constructor | `constructor(...) {}` | `def __init__(self, ...):` | `Order(...) {}` | convenção `func NewOrder(...) (*Order, error)` |
-| `this` | `this` | `self` (explícito) | `this` | receiver: `func (o *Order) Confirm()` |
-| Privado | `private` / `#campo` | `_campo` (convenção) | `private` | letra minúscula (privado ao pacote) |
-| Interface | `interface` (estrutural) | `ABC` ou `Protocol` | `interface` (+ `implements`) | `interface` (implícita) |
-| Herança | `extends` | `class B(A):` | `extends` | não tem → composição (embedding) |
-| Imutável | `readonly` | `@dataclass(frozen=True)` | `final` / `record` | não tem; use campos privados + sem setters |
-| Enum | union de literais ou `enum` | `class S(Enum):` | `enum S {}` | `const ( A = iota ... )` |
-| Nulo | `null` / `undefined` | `None` | `null` / `Optional<T>` | `nil` |
-| Erros | `throw` / `try-catch` | `raise` / `try-except` | `throw` / `try-catch` | retorno `error` + `if err != nil` |
-| Async | `async/await` + Promise | `async/await` + asyncio | Threads / virtual threads / `CompletableFuture` | goroutines + channels |
-| Metadados | Decorators `@Controller()` | Decorators `@router.get()` | Annotations `@RestController` | Struct tags `` `json:"id"` `` |
-| DI | Container do Nest (`providers`) | `Depends()` | Container do Spring (beans) | Manual no `main.go` |
-| Dinheiro | lib decimal ou centavos em `number` inteiro | `Decimal` | `BigDecimal` | centavos em `int64` |
-| Kafka | `@nestjs/microservices` + `kafkajs` | `aiokafka` | `spring-kafka` | `segmentio/kafka-go` |
-| RabbitMQ | `amqplib` | `aio-pika` | `spring-boot-starter-amqp` | `rabbitmq/amqp091-go` |
+| Tópico | TypeScript / NestJS | Python / FastAPI | Java / Spring | Go | PHP / Laravel |
+|---|---|---|---|---|---|
+| Arquivo principal | `src/main.ts` | `app/main.py` | `PaymentApplication.java` | `cmd/<app>/main.go` | `bootstrap/app.php` + `routes/api.php` |
+| Gerenciador | npm / pnpm (`package.json`) | uv / pip (`pyproject.toml`) | Maven / Gradle (`pom.xml`) | go modules (`go.mod`) | Composer (`composer.json`) |
+| Rodar | `npm run start:dev` | `uv run fastapi dev app/main.py` | `./mvnw spring-boot:run` | `go run ./cmd/notification` | `php artisan serve --port=8082` |
+| Testar | `npm test` (Jest) | `uv run pytest` | `./mvnw test` (JUnit 5) | `go test ./...` | `./vendor/bin/pest` (ou `php artisan test`) |
+| Tipagem | Estática, estrutural, opcional em runtime | Dinâmica + type hints (checados por mypy/pyright) | Estática, nominal | Estática, estrutural nas interfaces | Dinâmica + tipos declarados (checados em runtime com `declare(strict_types=1)`; PHPStan opcional) |
+| Variável | `let x = 1` | `x = 1` | `int x = 1;` / `var x = 1;` | `x := 1` / `var x int = 1` | `$x = 1;` |
+| Constante | `const X = 1` | `X: Final = 1` (convenção) | `static final int X = 1;` | `const X = 1` | `const X = 1;` / `public const X = 1;` |
+| Função | `function f(a: number): number {}` | `def f(a: int) -> int:` | `int f(int a) {}` (dentro de classe) | `func f(a int) int {}` | `function f(int $a): int {}` |
+| Lambda | `(a) => a * 2` | `lambda a: a * 2` | `a -> a * 2` | `func(a int) int { return a * 2 }` | `fn($a) => $a * 2` |
+| Classe | `class Order {}` | `class Order:` | `class Order {}` | não tem → `type Order struct {}` | `class Order {}` |
+| Constructor | `constructor(...) {}` | `def __init__(self, ...):` | `Order(...) {}` | convenção `func NewOrder(...) (*Order, error)` | `__construct(...)` |
+| `this` | `this` | `self` (explícito) | `this` | receiver: `func (o *Order) Confirm()` | `$this` |
+| Privado | `private` / `#campo` | `_campo` (convenção) | `private` | letra minúscula (privado ao pacote) | `private` |
+| Interface | `interface` (estrutural) | `ABC` ou `Protocol` | `interface` (+ `implements`) | `interface` (implícita) | `interface` (+ `implements`) |
+| Herança | `extends` | `class B(A):` | `extends` | não tem → composição (embedding) | `extends` (+ `trait` para reuso) |
+| Imutável | `readonly` | `@dataclass(frozen=True)` | `final` / `record` | não tem; use campos privados + sem setters | `readonly` (propriedade ou classe) |
+| Enum | union de literais ou `enum` | `class S(Enum):` | `enum S {}` | `const ( A = iota ... )` | `enum S: string {}` (nativo, 8.1+) |
+| Nulo | `null` / `undefined` | `None` | `null` / `Optional<T>` | `nil` | `null` / tipo `?T` |
+| Erros | `throw` / `try-catch` | `raise` / `try-except` | `throw` / `try-catch` | retorno `error` + `if err != nil` | `throw` / `try-catch` |
+| Async | `async/await` + Promise | `async/await` + asyncio | Threads / virtual threads / `CompletableFuture` | goroutines + channels | Síncrono por padrão (um request = um processo); loops longos via comando Artisan; async real só com Swoole/Octane/Fibers |
+| Metadados | Decorators `@Controller()` | Decorators `@router.get()` | Annotations `@RestController` | Struct tags `` `json:"id"` `` | Atributos `#[Route]` (pouco usados no Laravel; rotas ficam em `routes/*.php`) |
+| DI | Container do Nest (`providers`) | `Depends()` | Container do Spring (beans) | Manual no `main.go` | Service Container (`$this->app->bind`) |
+| Dinheiro | lib decimal ou centavos em `number` inteiro | `Decimal` | `BigDecimal` | centavos em `int64` | `brick/money` / `bcmath` (string) ou centavos em `int` |
+| Kafka | `@nestjs/microservices` + `kafkajs` | `aiokafka` | `spring-kafka` | `segmentio/kafka-go` | `mateusjunges/laravel-kafka` (`ext-rdkafka`) |
+| RabbitMQ | `amqplib` | `aio-pika` | `spring-boot-starter-amqp` | `rabbitmq/amqp091-go` | `php-amqplib/php-amqplib` |
 
 ---
 
@@ -1718,3 +1720,707 @@ for d := range msgs {
 ```
 
 Kafka (se quiser que o Go consuma eventos também): `github.com/segmentio/kafka-go` — `kafka.NewReader(kafka.ReaderConfig{Brokers, GroupID, Topic})` e `reader.FetchMessage` + `reader.CommitMessages`.
+
+---
+
+## 5. PHP + Laravel
+
+### Arquivo principal
+
+```php
+<?php
+// bootstrap/app.php  (Laravel 11+: aqui ficam rotas, middlewares e tratamento de erros)
+declare(strict_types=1);
+
+use App\Modules\Shipping\Domain\Exceptions\ShipmentNotFound;
+use Illuminate\Foundation\Application;
+use Illuminate\Foundation\Configuration\Exceptions;
+use Illuminate\Foundation\Configuration\Middleware;
+
+return Application::configure(basePath: dirname(__DIR__))
+    ->withRouting(
+        api: __DIR__.'/../routes/api.php',
+        commands: __DIR__.'/../routes/console.php',
+        apiPrefix: '',            // por padrão as rotas de api ganham o prefixo /api
+        health: '/health',        // endpoint de health pronto
+    )
+    ->withMiddleware(function (Middleware $middleware) {})
+    ->withExceptions(function (Exceptions $exceptions) {
+        $exceptions->render(fn (ShipmentNotFound $e) =>
+            response()->json(['error' => 'SHIPMENT_NOT_FOUND', 'message' => $e->getMessage()], 404));
+    })
+    ->create();
+```
+
+```php
+<?php
+// routes/api.php
+use App\Modules\Shipping\Presentation\Controllers\ShipmentController;
+use Illuminate\Support\Facades\Route;
+
+Route::get('/shipments', [ShipmentController::class, 'byOrder']);
+Route::patch('/shipments/{id}/dispatch', [ShipmentController::class, 'dispatch']);
+Route::patch('/shipments/{id}/deliver', [ShipmentController::class, 'deliver']);
+```
+
+> PHP roda **um processo por request** (PHP-FPM) e esquece tudo no fim. Por isso o consumer Kafka **não** vive no `bootstrap/app.php`: é um comando Artisan à parte (ver [Kafka e RabbitMQ](#php-kafka-rabbitmq)).
+
+### Ferramentas e comandos
+
+| Ação | Comando |
+|---|---|
+| Criar projeto | `composer create-project laravel/laravel shipping-service` |
+| Habilitar rotas de API | `php artisan install:api` |
+| Gerar peças | `php artisan make:migration create_shipments_table` · `make:model ShipmentModel` · `make:command ConsumeOrdersCommand` · `make:provider ShippingServiceProvider` |
+| Adicionar dep | `composer require <pkg>` · dev: `composer require --dev <pkg>` |
+| Rodar (API) | `php artisan serve --port=8082` |
+| Rodar (consumer) | `php artisan shipping:consume-orders` |
+| Migrations | `php artisan migrate` · `migrate:fresh` (recria tudo) · `migrate:rollback` |
+| Testes | `./vendor/bin/pest` · `./vendor/bin/pest --filter dispatch` · `php artisan test` |
+| Lint / tipos | `./vendor/bin/pint` (formatação) · `./vendor/bin/phpstan analyse` (opcional) |
+| Extensão do Kafka | `pecl install rdkafka` (precisa da `librdkafka`; no Docker, instale na imagem) |
+
+### Variáveis e constantes
+
+```php
+<?php
+declare(strict_types=1);          // 1ª linha de todo arquivo: ativa checagem estrita de tipos escalares
+
+$attempts = 0;                    // variável sempre começa com $
+const MAX_ATTEMPTS = 3;           // constante global
+
+final class Shipment {
+    public const PREFIX = 'SF';   // constante de classe: Shipment::PREFIX
+}
+
+$ids = ['a', 'b'];
+$ids[] = 'c';                     // adiciona ao array
+```
+
+### Tipos
+
+```php
+<?php
+// escalares
+$name = 'Ana';        // string
+$qty = 2;             // int (64 bits)
+$ratio = 0.5;         // float — NÃO use para dinheiro
+$active = true;       // bool
+$nothing = null;      // null
+
+// dinheiro: bcmath trabalha com string, sem perda de precisão
+$total = bcadd('10.50', '20.25', 2);      // "30.75"
+bccomp($total, '1000', 2) > 0;            // compara (1, 0, -1)
+
+// arrays — o mesmo tipo serve de lista e de mapa
+$list = ['a', 'b'];
+$map = ['p1' => 10, 'p2' => 5];
+$map['p3'] = 1;
+isset($map['p4']);                         // false (chave não existe)
+
+// tipos em assinaturas
+function find(string $id): ?Shipment {}                // ?T = T ou null
+function parse(int|string $v): int {}                  // union
+function fail(): never { throw new RuntimeException(); }
+
+// enum nativo (8.1+), com valor
+enum ShipmentStatus: string {
+    case Pending = 'PENDING';
+    case Dispatched = 'DISPATCHED';
+    case Delivered = 'DELIVERED';
+
+    public function canDispatch(): bool { return $this === self::Pending; }
+}
+ShipmentStatus::from('PENDING');           // lança ValueError se inválido
+ShipmentStatus::tryFrom('X');              // null se inválido
+
+// tipar o conteúdo do array só por docblock (PHP não tem generics reais)
+/** @return list<Shipment> */
+function all(): array {}
+```
+
+### Funções
+
+```php
+<?php
+function total(int $a, int $b): int { return $a + $b; }
+
+$double = fn (int $n): int => $n * 2;               // arrow function (captura variáveis de fora sozinha)
+$greet = function (string $n) use ($prefix) { return "$prefix $n"; };   // closure: captura explícita
+
+function greet(string $name, string $greeting = 'Olá'): string { return "$greeting, $name"; }
+greet(greeting: 'Oi', name: 'Ana');                // argumentos nomeados
+
+function sum(int ...$values): int { return array_sum($values); }   // variádica
+
+[$a, $b] = [1, 2];                                 // desestruturação
+['id' => $id, 'orderId' => $orderId] = $row;
+```
+
+### Classes e constructor
+
+```php
+<?php
+declare(strict_types=1);
+
+namespace App\Modules\Shipping\Domain\Entities;
+
+final class Shipment extends AggregateRoot
+{
+    private ShipmentStatus $status = ShipmentStatus::Pending;
+    private ?TrackingCode $trackingCode = null;
+
+    // constructor privado + factory estática = força passar pelas validações
+    // "constructor promotion": declara a propriedade e atribui no mesmo lugar
+    private function __construct(
+        public readonly string $id,
+        public readonly string $orderId,
+        private readonly string $customerEmail,
+    ) {}
+
+    public static function create(string $id, string $orderId, string $customerEmail): self
+    {
+        $shipment = new self($id, $orderId, $customerEmail);
+        $shipment->addEvent(new ShipmentCreated($id, $orderId));
+        return $shipment;
+    }
+
+    public function dispatch(): void
+    {
+        if (!$this->status->canDispatch()) {
+            throw new InvalidShipmentTransition("cannot dispatch from {$this->status->value}");
+        }
+        $this->status = ShipmentStatus::Dispatched;
+        $this->trackingCode = TrackingCode::generate();
+        $this->addEvent(new ShipmentDispatched($this->id, $this->orderId, $this->trackingCode));
+    }
+
+    public function status(): ShipmentStatus { return $this->status; }   // getter (sem setter)
+}
+```
+
+**Value Object** (imutável, igualdade por valor):
+
+```php
+final readonly class TrackingCode
+{
+    public function __construct(public string $value)
+    {
+        if (!preg_match('/^SF[0-9A-Z]{10}$/', $value)) {
+            throw new DomainError('invalid tracking code');
+        }
+    }
+
+    public static function generate(): self
+    {
+        return new self('SF'.strtoupper(substr(bin2hex(random_bytes(5)), 0, 10)));
+    }
+
+    public function equals(self $other): bool { return $this->value === $other->value; }
+}
+```
+
+Modificadores: `public` · `protected` · `private` · `static` · `final` · `abstract` · `readonly`.
+`==` compara com conversão de tipo; use sempre **`===`**.
+
+### Interfaces e herança
+
+```php
+<?php
+interface EventPublisher                                  // port
+{
+    /** @param list<DomainEvent> $events */
+    public function publish(array $events): void;
+}
+
+final class KafkaEventPublisher implements EventPublisher // adapter
+{
+    public function publish(array $events): void { /* ... */ }
+}
+
+abstract class AggregateRoot
+{
+    /** @var list<DomainEvent> */
+    private array $events = [];
+
+    protected function addEvent(DomainEvent $e): void { $this->events[] = $e; }
+
+    /** @return list<DomainEvent> */
+    public function pullEvents(): array
+    {
+        $events = $this->events;
+        $this->events = [];
+        return $events;
+    }
+}
+
+// trait = reuso de código sem herança (cuidado: vira bagunça fácil)
+trait HasTimestamps { private \DateTimeImmutable $createdAt; }
+```
+
+> O container do Laravel resolve **interfaces** (existem em runtime), diferente do NestJS onde interface some no JS.
+
+### Erros (exceptions)
+
+```php
+<?php
+class DomainError extends \DomainException {}
+final class ShipmentNotFound extends DomainError {}
+final class InvalidShipmentTransition extends DomainError {}
+
+try {
+    $shipment->deliver();
+} catch (InvalidShipmentTransition $e) {
+    // ...
+} catch (ShipmentNotFound | \InvalidArgumentException $e) {   // várias de uma vez
+    // ...
+} finally {
+    // sempre roda
+}
+```
+
+Traduzir para HTTP: `$exceptions->render(...)` no `bootstrap/app.php` (exemplo no topo) ou classes que implementam `render()`. Erros do PHP (ex.: `TypeError`) também são `Throwable` e podem ser capturados.
+
+### Async
+
+PHP é **síncrono e sem estado entre requests**: cada request nasce e morre. Não há `async/await` no uso comum.
+
+```php
+// processo long-running = comando Artisan (loop infinito), rodando num container/pod próprio
+final class ConsumeOrdersCommand extends Command
+{
+    protected $signature = 'shipping:consume-orders';
+
+    public function handle(CreateShipment $createShipment): int
+    {
+        // consome mensagens num loop (ver seção Kafka). Trate SIGTERM para parar com elegância:
+        // pcntl_async_signals(true); pcntl_signal(SIGTERM, fn () => $this->shouldStop = true);
+        return self::SUCCESS;
+    }
+}
+```
+
+Concorrência = **mais processos** (escalar réplicas do worker; consumer group divide as partições). Async de verdade só com Octane (Swoole/RoadRunner) ou Fibers, fora do escopo.
+
+### Null-safety
+
+```php
+$email = $order?->customer?->email;       // nullsafe operator
+$port = $_ENV['PORT'] ?? 8082;            // null coalescing (só null / não definido)
+$name ??= 'anon';                         // atribui se for null
+
+function find(string $id): ?Shipment {}   // tipo anulável explícito
+$s = find('1') ?? throw new ShipmentNotFound('1');   // throw como expressão
+```
+
+### Módulos / imports
+
+```php
+<?php
+namespace App\Modules\Shipping\Application\UseCases;   // 1ª linha; espelha a pasta (PSR-4)
+
+use App\Modules\Shipping\Domain\Entities\Shipment;
+use App\Modules\Shipping\Domain\Repositories\ShipmentRepository;
+use function array_map;                                  // import de função
+```
+
+```json
+// composer.json — mapeia o namespace raiz para a pasta
+"autoload": { "psr-4": { "App\\": "app/" } }
+```
+
+Depois de criar uma classe nova em pasta nova: `composer dump-autoload` (geralmente automático com PSR-4).
+
+### Atributos (o "decorator" do PHP) e o que o Laravel usa
+
+PHP 8 tem **attributes** (`#[...]`), mas o Laravel usa pouco. O normal:
+
+| Necessidade | Em Laravel |
+|---|---|
+| Rotas HTTP | `Route::get(...)` em `routes/api.php` (arquivo, não annotation) |
+| Validação | `FormRequest` com `rules()` ou `$request->validate([...])` |
+| Mapear banco | Model Eloquent (`$table`, `$fillable`, `$casts`) |
+| Comando CLI | `$signature` na classe do Command |
+| Middleware | Classe + `->middleware(...)` na rota |
+| Injeção | Type-hint no constructor / método do controller |
+
+```php
+// Presentation/Requests (opcional) ou direto no controller
+$data = $request->validate([
+    'orderId' => ['required', 'string'],
+]);
+
+// Presentation/Controllers/ShipmentController.php
+final class ShipmentController
+{
+    public function dispatch(string $id, DispatchShipment $useCase): JsonResponse   // use case injetado pelo container
+    {
+        $out = $useCase->execute($id);
+        return response()->json($out);
+    }
+
+    public function byOrder(Request $request, GetShipment $useCase): JsonResponse
+    {
+        return response()->json($useCase->byOrderId($request->query('orderId')));
+    }
+}
+```
+
+**Eloquent (Active Record) — só na Infra:**
+
+```php
+final class ShipmentModel extends Model
+{
+    protected $table = 'shipments';
+    public $incrementing = false;
+    protected $keyType = 'string';
+    protected $fillable = ['id', 'order_id', 'customer_email', 'status', 'tracking_code'];
+}
+
+// repositório converte Model <-> entidade
+final class EloquentShipmentRepository implements ShipmentRepository
+{
+    public function findByOrderId(string $orderId): ?Shipment
+    {
+        $row = ShipmentModel::where('order_id', $orderId)->first();
+        return $row ? Shipment::restore($row->id, $row->order_id, $row->customer_email, /* ... */) : null;
+    }
+}
+```
+
+### Injeção de dependência
+
+```php
+<?php
+// Application/UseCases/DispatchShipment.php — PHP puro, sem facades
+final class DispatchShipment
+{
+    public function __construct(
+        private readonly ShipmentRepository $shipments,
+        private readonly EventPublisher $publisher,
+        private readonly NotificationSender $notifier,
+    ) {}
+
+    public function execute(string $id): ShipmentOutput { /* ... */ }
+}
+
+// Providers/ShippingServiceProvider.php — a "cola" (registre em bootstrap/providers.php)
+final class ShippingServiceProvider extends ServiceProvider
+{
+    public function register(): void
+    {
+        $this->app->bind(ShipmentRepository::class, EloquentShipmentRepository::class);
+        $this->app->bind(EventPublisher::class, KafkaEventPublisher::class);
+        $this->app->bind(NotificationSender::class, RabbitMqNotificationSender::class);
+        // DispatchShipment não precisa de registro: o container resolve pelo type-hint do constructor
+    }
+}
+```
+
+`bind` cria uma instância nova a cada resolução; `singleton` reaproveita. Nos testes: `$this->app->bind(EventPublisher::class, fn () => new FakePublisher());`.
+
+### Testes (Pest)
+
+```php
+<?php
+// tests/Unit/ShipmentTest.php
+use App\Modules\Shipping\Domain\Entities\Shipment;
+
+it('is born pending', function () {
+    $s = Shipment::create('s1', 'ord-1', 'a@b.com');
+
+    expect($s->status())->toBe(ShipmentStatus::Pending);
+});
+
+it('rejects deliver before dispatch', function () {
+    $s = Shipment::create('s1', 'ord-1', 'a@b.com');
+
+    $s->deliver();
+})->throws(InvalidShipmentTransition::class);
+
+it('rejects invalid tracking codes', function (string $code) {
+    new TrackingCode($code);
+})->with(['abc', 'SF123', ''])->throws(DomainError::class);
+
+// tests/Unit/DispatchShipmentTest.php — fake escrito à mão, sem framework de mock
+beforeEach(function () {
+    $this->repo = new InMemoryShipmentRepository();
+    $this->publisher = new FakeEventPublisher();
+    $this->sut = new DispatchShipment($this->repo, $this->publisher, new FakeNotificationSender());
+});
+
+it('publishes shipment.dispatched', function () {
+    $this->repo->save(Shipment::create('s1', 'ord-1', 'a@b.com'));
+
+    $this->sut->execute('s1');
+
+    expect($this->publisher->published)->toHaveCount(1);
+});
+```
+
+```php
+// tests/Feature/ShipmentsApiTest.php — HTTP + banco (RefreshDatabase roda as migrations)
+uses(Illuminate\Foundation\Testing\RefreshDatabase::class);
+
+it('returns 404 for unknown order', function () {
+    $this->getJson('/shipments?orderId=nope')->assertNotFound();
+});
+```
+
+Teste de integração com Kafka/Postgres reais: Testcontainers para PHP existe, mas é mais imaturo; alternativa simples é subir o `docker compose` de `infra/` e rodar a suíte contra ele.
+
+### Kafka e RabbitMQ
+
+<a id="php-kafka-rabbitmq"></a>
+
+```php
+<?php
+// Consumer Kafka (mateusjunges/laravel-kafka) — dentro do comando shipping:consume-orders
+use Junges\Kafka\Facades\Kafka;
+use Junges\Kafka\Contracts\ConsumerMessage;
+use Junges\Kafka\Contracts\MessageConsumer;
+
+$consumer = Kafka::consumer(['order.confirmed'])
+    ->withBrokers(config('shipping.kafka_brokers'))
+    ->withConsumerGroupId('shipping-service')
+    ->withAutoCommit(false)
+    ->withHandler(function (ConsumerMessage $message, MessageConsumer $consumer) use ($createShipment) {
+        $envelope = $message->getBody();                 // array decodificado do JSON
+        $createShipment->execute($envelope['eventId'], $envelope['payload']);   // idempotente por eventId
+        $consumer->commit($message);                     // commit só depois de processar
+    })
+    ->build();
+
+$consumer->consume();                                    // bloqueia (loop)
+
+// Producer Kafka — a chave é o orderId (mesma partição = ordem por pedido)
+use Junges\Kafka\Message\Message;
+
+Kafka::publish(config('shipping.kafka_brokers'))
+    ->onTopic('shipment.dispatched')
+    ->withMessage(new Message(body: $envelope, key: $orderId))
+    ->send();
+// (confira os nomes dos métodos na versão instalada: a API do pacote mudou entre versões)
+
+// RabbitMQ — php-amqplib direto (formato de mensagem livre, compatível com o consumer Go)
+use PhpAmqpLib\Connection\AMQPStreamConnection;
+use PhpAmqpLib\Message\AMQPMessage;
+
+$conn = new AMQPStreamConnection($host, 5672, $user, $pass);
+$ch = $conn->channel();
+$ch->exchange_declare('notifications', 'direct', false, true, false);
+$ch->confirm_select();
+$ch->basic_publish(
+    new AMQPMessage(json_encode($msg, JSON_THROW_ON_ERROR), [
+        'content_type' => 'application/json',
+        'delivery_mode' => AMQPMessage::DELIVERY_MODE_PERSISTENT,
+    ]),
+    'notifications',
+    'email.send',
+);
+$ch->wait_for_pending_acks();
+```
+
+> Não use o driver de filas do Laravel (`Queue`/`Job`) para falar com o consumer Go: ele serializa o job num formato próprio (`{"job": "...", "data": {...}}`) e quebraria o contrato da seção 3.3.
+
+---
+
+## 6. Terraform (HCL)
+
+Terraform não é linguagem de programação: **HCL é declarativa**. Você descreve o estado desejado e o Terraform calcula o que fazer. Por isso esta seção tem estrutura diferente das anteriores.
+
+### Arquivo principal
+
+Não há `main`. O Terraform lê **todos os `.tf` da pasta** juntos. Convenção de nomes:
+
+| Arquivo | Conteúdo |
+|---|---|
+| `versions.tf` | Versão do Terraform e dos providers |
+| `main.tf` | Recursos e chamadas de módulos |
+| `variables.tf` | Entradas |
+| `outputs.tf` | Saídas |
+| `terraform.tfvars` | Valores das variáveis (local) |
+
+```hcl
+# versions.tf
+terraform {
+  required_version = ">= 1.9"
+  required_providers {
+    kind       = { source = "tehcyx/kind",           version = "~> 0.7" }
+    helm       = { source = "hashicorp/helm",        version = "~> 2.15" }
+    kubernetes = { source = "hashicorp/kubernetes",  version = "~> 2.33" }
+  }
+}
+
+provider "kubernetes" {
+  config_path = module.cluster.kubeconfig_path
+}
+```
+
+(Confira as versões atuais no registry; estas servem de formato.)
+
+### Ferramentas e comandos
+
+| Ação | Comando |
+|---|---|
+| Baixar providers e módulos | `terraform init` |
+| Formatar / validar | `terraform fmt -recursive` · `terraform validate` |
+| Ver o que vai mudar | `terraform plan` (salvar: `-out=tfplan`) |
+| Aplicar | `terraform apply` (ou `apply tfplan`) |
+| Destruir tudo | `terraform destroy` |
+| Só um alvo | `terraform apply -target=module.cluster` |
+| Ver o state | `terraform state list` · `terraform state show <endereço>` |
+| Console de expressões | `terraform console` |
+| Testes | `terraform test` |
+
+### Blocos
+
+```hcl
+resource "kubernetes_namespace" "shopflow" {   # resource "<tipo>" "<nome local>"
+  metadata { name = "shopflow" }
+}
+
+data "kubernetes_service" "ingress" {          # data = lê algo que já existe
+  metadata {
+    name      = "ingress-nginx-controller"
+    namespace = "ingress-nginx"
+  }
+}
+
+# referência: <tipo>.<nome>.<atributo>
+# kubernetes_namespace.shopflow.metadata[0].name
+```
+
+### Variáveis, locals e outputs
+
+```hcl
+variable "cluster_name" {
+  type    = string
+  default = "shopflow"
+}
+
+variable "postgres_password" {
+  type      = string
+  sensitive = true          # não aparece no plan/output; ainda vai para o state!
+}
+
+locals {
+  topics = ["order.created", "stock.reserved", "shipment.dispatched"]
+  labels = { app = "shopflow", env = var.env }
+}
+
+output "ingress_url" {
+  value = "http://localhost"
+}
+```
+
+Valor de variável vem de (maior precedência primeiro): `-var`, `*.tfvars`, `TF_VAR_nome` (env), `default`.
+
+### Tipos
+
+```hcl
+# primitivos: string, number, bool
+# coleções: list(string), set(string), map(string)
+# estruturados: object({ name = string, partitions = number }), tuple([...])
+# any = o Terraform infere
+
+variable "topics" {
+  type = map(object({
+    partitions = number
+    retention  = optional(string, "7d")   # opcional com default
+  }))
+}
+```
+
+### Expressões, `for_each` e condicionais
+
+```hcl
+resource "kubernetes_manifest" "topic" {
+  for_each = toset(local.topics)           # uma instância por item (set de string)
+
+  manifest = {
+    apiVersion = "kafka.strimzi.io/v1beta2"
+    kind       = "KafkaTopic"
+    metadata = {
+      name      = replace(each.key, ".", "-")     # k8s não aceita "." em alguns nomes
+      namespace = "shopflow"
+      labels    = { "strimzi.io/cluster" = "shopflow" }
+    }
+    spec = { partitions = 3, replicas = 1 }
+  }
+}
+
+# endereço de cada instância: kubernetes_manifest.topic["order.created"]
+
+count      = var.enable_metrics ? 1 : 0                    # condicional: cria ou não
+names      = [for t in local.topics : upper(t)]            # for expression (lista)
+by_name    = { for t in local.topics : t => length(t) }    # for expression (mapa)
+msg        = "cluster ${var.cluster_name}"                 # interpolação
+```
+
+> `count` indexa por posição (apagar o item do meio recria os seguintes); `for_each` indexa por chave. **Prefira `for_each`.**
+
+### Módulos
+
+```hcl
+# main.tf (raiz)
+module "cluster" {
+  source       = "./modules/cluster"      # pasta local; também aceita registry / git
+  cluster_name = var.cluster_name
+}
+
+module "messaging" {
+  source     = "./modules/messaging"
+  topics     = local.topics
+  depends_on = [module.cluster]           # operators precisam existir antes
+}
+
+# dentro de modules/cluster/outputs.tf
+output "kubeconfig_path" { value = kind_cluster.this.kubeconfig_path }
+
+# uso do output de um módulo: module.cluster.kubeconfig_path
+```
+
+Módulo = pasta com `variables.tf` (entradas), recursos e `outputs.tf` (saídas). Quem chama só enxerga entradas e saídas.
+
+### Helm e Kubernetes (providers)
+
+```hcl
+resource "helm_release" "strimzi" {
+  name             = "strimzi"
+  repository       = "https://strimzi.io/charts/"
+  chart            = "strimzi-kafka-operator"
+  namespace        = "strimzi"
+  create_namespace = true
+  wait             = true                    # espera os pods ficarem prontos
+}
+```
+
+### State
+
+- `terraform.tfstate` mapeia cada bloco ao objeto real. Sem ele o Terraform não sabe o que já criou.
+- Contém **valores em texto puro, inclusive segredos**: nunca commitar (`.gitignore`: `*.tfstate*`, `.terraform/`, `*.tfvars` com segredo).
+- Em equipe, o state fica num **backend remoto** com lock (S3 + DynamoDB, Azure Storage, etc.). Local, o arquivo em disco basta.
+- `terraform import` traz um recurso existente para o state; `terraform state rm` esquece sem destruir.
+
+### Testes (`terraform test`)
+
+```hcl
+# tests/messaging.tftest.hcl
+mock_provider "kubernetes" {}          # não precisa de cluster
+
+run "creates_one_topic_per_item" {
+  command = plan                       # só planeja, não cria nada
+
+  variables {
+    topics = ["order.created", "order.cancelled"]
+  }
+
+  assert {
+    condition     = length(kubernetes_manifest.topic) == 2
+    error_message = "expected one KafkaTopic per topic"
+  }
+}
+```
+
+Rodar: `terraform test`. Use `command = apply` só quando precisar de recursos reais.

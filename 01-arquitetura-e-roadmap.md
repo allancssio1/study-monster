@@ -1,10 +1,11 @@
 # ShopFlow — Guia de Arquitetura e Roadmap
 
-> Projeto de estudo: **microserviços poliglotas** com **Kafka**, **RabbitMQ** e **Kubernetes**,
+> Projeto de estudo: **microserviços poliglotas** com **Kafka**, **RabbitMQ**, **Kubernetes** e **Terraform**,
 > usando **DDD**, **Clean Architecture**, **TDD** e **OOP**.
 > Este guia diz *o que* construir e *em que ordem*. O código, as dependências e os projetos são seus.
 >
 > Referência de sintaxe das linguagens: [`02-guia-linguagens.md`](./02-guia-linguagens.md)
+> Épicos e tasks para executar cada fase: [`backlog/`](./backlog/README.md)
 
 ---
 
@@ -20,9 +21,10 @@
 8. [TDD: backlog de testes por serviço](#8-tdd-backlog-de-testes-por-serviço)
 9. [Infra local (Docker Compose)](#9-infra-local-docker-compose)
 10. [Kubernetes](#10-kubernetes)
-11. [Roadmap em fases](#11-roadmap-em-fases)
-12. [Convenções](#12-convenções)
-13. [Referências](#13-referências)
+11. [Terraform (infra como código)](#11-terraform-infra-como-código)
+12. [Roadmap em fases](#12-roadmap-em-fases)
+13. [Convenções](#13-convenções)
+14. [Referências](#14-referências)
 
 ---
 
@@ -37,6 +39,7 @@
 | `catalog-service` | Python + FastAPI | **Catalog & Inventory** | Cadastra produtos, reserva e libera estoque |
 | `payment-service` | Java + Spring Boot | **Payments** | Processa o pagamento (gateway fake) |
 | `notification-service` | Go | **Notification** | Consome comandos de e-mail do RabbitMQ e "envia" (log) |
+| `shipping-service` | PHP + Laravel | **Shipping** | Cria e acompanha a entrega de pedidos confirmados (reage a `order.confirmed`) |
 
 ### O que cada tecnologia ensina aqui
 
@@ -45,6 +48,8 @@
 | **Kafka** | Eventos de domínio entre order, catalog e payment | Tópicos, partições, chave de mensagem, consumer groups, offsets, replay, ordenação por chave, idempotência |
 | **RabbitMQ** | Comando "enviar e-mail" para o notification | Exchanges, routing keys, filas, ack/nack, retry, dead-letter queue (DLQ) |
 | **Kubernetes** | Deploy de tudo no `kind` | Deployment, Service, ConfigMap, Secret, Ingress, probes, HPA, operators |
+| **Terraform** | Provisiona a plataforma (cluster kind, operators, tópicos, filas) como código | Providers, state, `plan`/`apply`, módulos, `for_each`, drift, `terraform test` |
+| **PHP / Laravel** | `shipping-service` | Active Record × entidade de domínio, processo long-running (consumer) num runtime pensado para request/response, container de DI |
 | **Microserviços** | Todo o sistema | Database-per-service, saga coreografada, consistência eventual, contratos |
 | **DDD** | Camada `domain` de cada serviço | Entities, Value Objects, Aggregates, Domain Events, Repositories |
 | **Clean Arch** | Organização das pastas | Regra de dependência, ports & adapters, domínio sem framework |
@@ -85,6 +90,7 @@
      ║                      KAFKA  (eventos de domínio)                  ║
      ║  order.created  stock.reserved  stock.failed  payment.approved    ║
      ║  payment.rejected  order.confirmed  order.cancelled               ║
+     ║  shipment.dispatched                                              ║
      ═════════════════════╪═══════════════════════════════════════════════
                           │ comando
               ┌───────────▼────────────┐
@@ -98,11 +104,23 @@
                                                           └────────────────────┘
 ```
 
+O `shipping-service` fica **depois** da saga e não aparece no diagrama acima para não poluí-lo:
+
+```
+   Kafka                      shipping-service (Laravel :8082)                 destinos
+ order.confirmed ──────────►  consumer (artisan shipping:consume-orders)
+                              └─► Shipment(PENDING) ──► shipping DB (Postgres)
+ PATCH /shipments/{id}/dispatch  (HTTP)
+                              └─► Shipment(DISPATCHED) ─► Kafka   shipment.dispatched
+                                                       └► RabbitMQ email.send (order-shipped)
+```
+
 Regras:
 
 - **Cada serviço tem seu próprio banco** (pode ser o mesmo Postgres com databases separados no dev). Nenhum serviço lê o banco do outro.
 - Comunicação **síncrona** só do cliente para os serviços (REST). **Entre serviços, só assíncrona** (Kafka/RabbitMQ).
 - `notification-service` não tem banco nem API de negócio, só `/health`.
+- O `shipping-service` tem banco próprio (`shipping`) e API própria (`/shipments`).
 
 ### 2.2 Saga coreografada do pedido
 
@@ -131,6 +149,8 @@ Cliente        order-service        Kafka          catalog-service     payment-s
 | `stock.failed` | order | Order → `CANCELLED` (motivo: sem estoque), publica `order.cancelled`, manda e-mail |
 | `payment.rejected` | order | Order → `CANCELLED` (motivo: pagamento recusado), publica `order.cancelled`, manda e-mail |
 | `order.cancelled` | catalog | **Libera o estoque** reservado para aquele pedido (compensação) — se houver reserva |
+
+**Depois da saga:** `order.confirmed` é consumido pelo `shipping-service`, que cria o `Shipment`. Ele **não participa da compensação**: só recebe pedidos já confirmados, então não há nada a desfazer nele.
 
 ### 2.3 Máquina de estados do pedido
 
@@ -178,11 +198,14 @@ Todo evento usa o mesmo envelope em JSON:
 | `stock.failed` | catalog | order | `{ orderId, reason, productIds: [] }` |
 | `payment.approved` | payment | order | `{ orderId, paymentId, amount }` |
 | `payment.rejected` | payment | order | `{ orderId, paymentId, amount, reason }` |
-| `order.confirmed` | order | (nenhum por enquanto — bom para testar replay depois) | `{ orderId }` |
+| `order.confirmed` | order | shipping | `{ orderId, customerEmail }` |
 | `order.cancelled` | order | catalog | `{ orderId, reason }` |
+| `shipment.dispatched` | shipping | (nenhum por enquanto — bom para testar replay depois) | `{ orderId, shipmentId, trackingCode }` |
 
 Configuração sugerida: 3 partições por tópico, replication factor 1 no dev.
-Consumer groups: `catalog-service`, `payment-service`, `order-service`.
+Consumer groups: `catalog-service`, `payment-service`, `order-service`, `shipping-service`.
+
+> `order.confirmed` ganhou o campo `customerEmail` (o shipping precisa dele para pedir o e-mail `order-shipped` sem consultar o order). É uma mudança **compatível** (campo adicionado), então mantém `version: 1` — exemplo prático da regra de versionamento da [seção 13](#13-convenções).
 
 > `stock.reserved` carrega o `total` para o payment não precisar consultar o order (evita chamada síncrona).
 
@@ -194,7 +217,7 @@ Consumer groups: `catalog-service`, `payment-service`, `order-service`.
 | Routing key | `email.send` |
 | Fila | `notifications.email` (durable) com `x-dead-letter-exchange: notifications.dlx` |
 | DLX | `notifications.dlx` (direct) → fila `notifications.email.dlq` |
-| Produtor | order-service |
+| Produtores | order-service e shipping-service |
 | Consumidor | notification-service (ack manual, `prefetch` = 10) |
 
 Mensagem:
@@ -208,7 +231,7 @@ Mensagem:
 }
 ```
 
-Templates: `order-confirmed`, `order-cancelled`.
+Templates: `order-confirmed`, `order-cancelled`, `order-shipped`.
 
 **Retry:** o consumer tenta processar; se falhar, republica com header `x-retry-count + 1`. Ao passar de 3, faz `nack(requeue=false)` → mensagem vai para a DLQ.
 Para testar: faça o "sender" falhar quando `to` terminar com `@fail.com`.
@@ -242,7 +265,16 @@ Para testar: faça o "sender" falhar quando `to` terminar com `@fail.com`.
 
 **notification-service (`:8081`)**: só `GET /health`.
 
-> Simplificação consciente: o `unitPrice` vem do cliente no `POST /orders`. Num sistema real o order pegaria o preço do catalog. Fica como desafio extra (fase 7).
+**shipping-service (`:8082`)**
+
+| Método | Rota | Body / Resposta |
+|---|---|---|
+| `GET` | `/shipments?orderId=...` | `200 { id, orderId, status, trackingCode? }` / `404` |
+| `PATCH` | `/shipments/{id}/dispatch` | `200 { id, status: "DISPATCHED", trackingCode }` / `404` / `409` se não estiver `PENDING` |
+| `PATCH` | `/shipments/{id}/deliver` | `200 { id, status: "DELIVERED" }` / `404` / `409` se não estiver `DISPATCHED` |
+| `GET` | `/health` | `200` |
+
+> Simplificação consciente: o `unitPrice` vem do cliente no `POST /orders`. Num sistema real o order pegaria o preço do catalog. Fica como desafio extra (fase 9).
 
 ---
 
@@ -283,9 +315,20 @@ Para testar: faça o "sender" falhar quando `to` terminar com `@fail.com`.
 
 | Tipo | Nome | Regras |
 |---|---|---|
-| Entity | `Notification` | `to` é e-mail válido, `template` conhecido |
+| Entity | `Notification` | `to` é e-mail válido, `template` conhecido (`order-confirmed`, `order-cancelled`, `order-shipped`) |
 | Port | `EmailSender` | `Send(ctx, notification) error` |
 | Adapter | `LogEmailSender` | Imprime no log; falha se `to` termina com `@fail.com` |
+
+### Shipping (shipping-service)
+
+| Tipo | Nome | Regras / Invariantes |
+|---|---|---|
+| Aggregate Root | `Shipment` | Um por `orderId` (idempotência). Nasce `PENDING`. `dispatch()` só se `PENDING` (gera o `TrackingCode`). `deliver()` só se `DISPATCHED`. Só avança, nunca volta. Guarda o `customerEmail` |
+| Value Object | `TrackingCode` | Formato `SF` + 10 dígitos/letras maiúsculas, imutável, igualdade por valor |
+| Value Object | `ShipmentStatus` | `PENDING` \| `DISPATCHED` \| `DELIVERED` (enum nativo do PHP) |
+| Domain Events | `ShipmentCreated`, `ShipmentDispatched`, `ShipmentDelivered` | `ShipmentDispatched` vira o tópico `shipment.dispatched` |
+| Repository (interface) | `ShipmentRepository` | `save(shipment)`, `findById(id)`, `findByOrderId(orderId)` |
+| Ports | `EventPublisher`, `NotificationSender` | Mesmos papéis dos outros serviços (Kafka e RabbitMQ ficam na infra) |
 
 ---
 
@@ -295,7 +338,7 @@ Para testar: faça o "sender" falhar quando `to` terminar com `@fail.com`.
 
 | Conceito | Definição curta | Exemplo no projeto |
 |---|---|---|
-| **Bounded Context** | Fronteira onde um modelo tem significado único | Ordering, Catalog, Payments, Notification = 1 serviço cada |
+| **Bounded Context** | Fronteira onde um modelo tem significado único | Ordering, Catalog, Payments, Notification, Shipping = 1 serviço cada |
 | **Ubiquitous Language** | Mesmos termos no código e na conversa | "reservar estoque", "confirmar pedido" |
 | **Entity** | Tem identidade; muda ao longo do tempo | `Order`, `Product` |
 | **Value Object** | Sem identidade, imutável, igual por valor | `Money`, `Email` |
@@ -410,7 +453,7 @@ Kafka "payment.approved"
 
 ## 7. Estrutura de pastas por serviço
 
-Mesmo esqueleto nos quatro serviços; muda só a convenção de nomes de cada linguagem.
+Mesmo esqueleto nos cinco serviços; muda só a convenção de nomes de cada linguagem.
 Os nomes de arquivo são **sugestões** para você criar conforme for implementando.
 
 ### 7.1 order-service — NestJS
@@ -580,7 +623,62 @@ notification-service/
 
 Criar: `go mod init github.com/<seu-user>/shopflow/notification-service` · Rodar: `go run ./cmd/notification` · Testar: `go test ./...`
 
-### 7.5 Raiz do repositório (monorepo)
+### 7.5 shipping-service — PHP + Laravel
+
+```
+shipping-service/
+├── composer.json
+├── artisan                             # CLI do Laravel
+├── Dockerfile
+├── bootstrap/
+│   └── app.php                         # ponto de entrada: rotas, middlewares, exceptions
+├── routes/
+│   ├── api.php                         # GET/PATCH /shipments
+│   └── console.php
+├── config/
+│   └── shipping.php                    # lê env vars (tópicos, brokers, URL do RabbitMQ)
+├── database/
+│   └── migrations/                     # shipments, processed_events
+├── app/
+│   ├── Providers/
+│   │   └── ShippingServiceProvider.php # liga ports → adapters ($this->app->bind)
+│   ├── Console/Commands/
+│   │   └── ConsumeOrdersCommand.php    # php artisan shipping:consume-orders (processo long-running)
+│   ├── Shared/Domain/                  AggregateRoot.php, DomainEvent.php, DomainError.php
+│   └── Modules/Shipping/
+│       ├── Domain/
+│       │   ├── Entities/               Shipment.php
+│       │   ├── ValueObjects/           TrackingCode.php, ShipmentStatus.php (enum)
+│       │   ├── Events/                 ShipmentCreated.php, ShipmentDispatched.php, ShipmentDelivered.php
+│       │   ├── Repositories/           ShipmentRepository.php     (interface)
+│       │   └── Services/
+│       ├── Application/
+│       │   ├── UseCases/               CreateShipment.php, DispatchShipment.php, DeliverShipment.php, GetShipment.php
+│       │   ├── Dtos/                   CreateShipmentInput.php, ShipmentOutput.php
+│       │   └── Ports/                  EventPublisher.php, NotificationSender.php
+│       ├── Infra/
+│       │   ├── Database/               ShipmentModel.php (Eloquent), ProcessedEventModel.php
+│       │   ├── Repositories/           EloquentShipmentRepository.php, InMemoryShipmentRepository.php
+│       │   └── Messaging/              KafkaEventPublisher.php, RabbitMqNotificationSender.php
+│       └── Presentation/
+│           ├── Controllers/            ShipmentController.php
+│           ├── Requests/               (FormRequest, se precisar validar body)
+│           └── Consumers/              OrderEventsConsumer.php
+└── tests/
+    ├── Unit/                           ShipmentTest.php, DispatchShipmentTest.php   (espelha app/)
+    ├── Integration/                    EloquentShipmentRepositoryTest.php
+    └── Feature/                        ShipmentsApiTest.php
+```
+
+> Em PHP, namespaces seguem a pasta (PSR-4) e usam `PascalCase`: `App\Modules\Shipping\Domain\Entities`. O autoload é configurado no `composer.json`.
+> `ShipmentModel` (Eloquent, padrão **Active Record**) fica **só na `Infra`**, e o repositório converte uma na outra — mesmo exercício do JPA no payment. É mais código, mas mantém o domínio sem framework.
+> Use cases são PHP puro (sem facades nem `app()`); o `ShippingServiceProvider` monta tudo.
+> **Consumer Kafka:** o PHP-FPM é feito para request/response; um consumer é um loop infinito. Por isso ele é um **comando Artisan** rodando como processo separado (no K8s, um Deployment à parte com a mesma imagem).
+> **Libs sugeridas:** `mateusjunges/laravel-kafka` (precisa da extensão `ext-rdkafka`) e `php-amqplib/php-amqplib` direto. O driver de filas do Laravel embrulha a mensagem em um formato próprio e quebraria o contrato com o consumer Go — mesmo motivo do `Transport.RMQ` do Nest.
+
+Criar: `composer create-project laravel/laravel shipping-service` · Rodar: `php artisan serve --port=8082` e, em outro terminal, `php artisan shipping:consume-orders` · Testar: `./vendor/bin/pest` (ou `php artisan test`)
+
+### 7.6 Raiz do repositório (monorepo)
 
 ```
 micro-servicos/
@@ -588,20 +686,26 @@ micro-servicos/
 ├── 02-guia-linguagens.md
 ├── infra/
 │   └── docker-compose.yml          # Kafka, RabbitMQ, Postgres, Kafka UI
-├── k8s/
+├── terraform/                      # plataforma como código (seção 11)
+│   ├── versions.tf  main.tf  variables.tf  outputs.tf
+│   ├── modules/                    cluster/, messaging/, database/
+│   └── tests/                      *.tftest.hcl
+├── k8s/                            # apps (deployments, services, ingress) — continuam em YAML
 │   ├── namespace.yaml
 │   ├── order/                      deployment.yaml, service.yaml, configmap.yaml, secret.yaml
 │   ├── catalog/
 │   ├── payment/
 │   ├── notification/
-│   ├── kafka/                      manifests do Strimzi (Kafka + KafkaTopic)
-│   ├── rabbitmq/                   RabbitmqCluster
+│   ├── shipping/                   web + worker (dois Deployments, mesma imagem)
+│   ├── kafka/                      manifests do Strimzi (Kafka + KafkaTopic) — viram Terraform na fase 8
+│   ├── rabbitmq/                   RabbitmqCluster — vira Terraform na fase 8
 │   ├── postgres/
 │   └── ingress.yaml
 ├── order-service/
 ├── catalog-service/
 ├── payment-service/
 ├── notification-service/
+├── shipping-service/
 └── requests.http                   # chamadas para testar o fluxo inteiro
 ```
 
@@ -671,6 +775,27 @@ Escreva **um teste por vez**, nesta ordem (domínio → use case → infra → e
 - [ ] consumer: falha com `retry < 3` → republica com `x-retry-count + 1`
 - [ ] consumer: falha com `retry = 3` → nack sem requeue (vai para a DLQ)
 - [ ] mensagem JSON inválida → direto para a DLQ (não adianta tentar de novo)
+- [ ] template `order-shipped` é aceito
+
+### shipping-service
+- [ ] `TrackingCode` rejeita formato inválido; dois com o mesmo valor são iguais
+- [ ] `Shipment` nasce `PENDING` e registra `ShipmentCreated`
+- [ ] `dispatch()` muda para `DISPATCHED`, gera o `TrackingCode` e registra `ShipmentDispatched`
+- [ ] `dispatch()` fora de `PENDING` lança erro; `deliver()` fora de `DISPATCHED` lança erro
+- [ ] `deliver()` muda para `DELIVERED` e registra `ShipmentDelivered`
+- [ ] `CreateShipment` salva o `Shipment` quando chega `order.confirmed`
+- [ ] `CreateShipment` para o mesmo `orderId` (ou o mesmo `eventId`) duas vezes não cria outro
+- [ ] `DispatchShipment` publica `shipment.dispatched` e envia o comando de e-mail `order-shipped`
+- [ ] `DispatchShipment` com id inexistente → erro `ShipmentNotFound`
+- [ ] `GET /shipments?orderId=` → 200 / 404; `PATCH .../dispatch` → 200 / 404 / 409
+- [ ] integração: `EloquentShipmentRepository` salva e recupera um `Shipment` (Postgres real) e converte `ShipmentModel` ↔ entidade
+- [ ] integração: o consumer lê `order.confirmed` de um Kafka real e cria o `Shipment`
+
+### terraform
+- [ ] `terraform fmt -check` e `terraform validate` passam
+- [ ] `terraform test` (`command = plan`): existe um `KafkaTopic` para cada item da lista de tópicos da seção 3.2
+- [ ] `terraform test` (`command = plan`): a fila `notifications.email` tem `x-dead-letter-exchange = notifications.dlx`
+- [ ] `terraform plan` logo depois de um `apply` não mostra nenhuma mudança (sem drift)
 
 ---
 
@@ -680,7 +805,7 @@ Você escreve o `infra/docker-compose.yml`. Ele precisa ter:
 
 | Serviço | Imagem sugerida | Portas | Observações |
 |---|---|---|---|
-| Postgres | `postgres:17` | 5432 | Crie 3 databases: `orders`, `catalog`, `payments` (script em `/docker-entrypoint-initdb.d`) |
+| Postgres | `postgres:17` | 5432 | Crie 4 databases: `orders`, `catalog`, `payments`, `shipping` (script em `/docker-entrypoint-initdb.d`) |
 | Kafka | `apache/kafka` (modo **KRaft**, sem Zookeeper) | 9092 | Configure `KAFKA_ADVERTISED_LISTENERS` para funcionar de fora do container (`localhost:9092`) e de dentro (`kafka:29092`) |
 | Kafka UI | `provectuslabs/kafka-ui` ou `kafbat/kafka-ui` | 8090 | Ver tópicos, mensagens, consumer groups e lag |
 | RabbitMQ | `rabbitmq:4-management` | 5672, 15672 | Painel em `http://localhost:15672` (guest/guest) |
@@ -690,7 +815,7 @@ Checklist:
 - [ ] Criar os tópicos (script ou `kafka-topics.sh` dentro do container) com 3 partições
 - [ ] Ver os tópicos no Kafka UI
 - [ ] Ver o painel do RabbitMQ
-- [ ] Conectar no Postgres e ver os 3 databases
+- [ ] Conectar no Postgres e ver os 4 databases
 
 > Exercício Kafka antes de codar: use `kafka-console-producer.sh` e `kafka-console-consumer.sh` com dois consumidores no **mesmo** group e depois em groups **diferentes**. Observe a diferença.
 > Exercício RabbitMQ: crie exchange, fila e binding pelo painel e publique uma mensagem na mão.
@@ -729,7 +854,8 @@ Use **kind** (Kubernetes in Docker) localmente. Ferramentas: `kind`, `kubectl`, 
    - `kind load docker-image order-service:dev --name shopflow` (sem registry)
    - `Deployment` com `imagePullPolicy: IfNotPresent`, env vindo do ConfigMap/Secret, probes, resources
    - `Service` ClusterIP
-7. `Ingress` com regras `/orders` → order, `/products` → catalog, `/payments` → payment.
+   - No shipping, a mesma imagem vira **dois Deployments**: `shipping-web` (serve a API) e `shipping-worker` (roda `php artisan shipping:consume-orders`)
+7. `Ingress` com regras `/orders` → order, `/products` → catalog, `/payments` → payment, `/shipments` → shipping.
 8. Instalar `metrics-server` e criar HPA para o order-service.
 
 ### 10.3 Exercícios de K8s
@@ -740,12 +866,98 @@ Use **kind** (Kubernetes in Docker) localmente. Ferramentas: `kind`, `kubectl`, 
 - [ ] Faça um rolling update trocando a imagem.
 - [ ] Rode um teste de carga (k6 ou `hey`) e veja o HPA escalar.
 - [ ] Derrube o notification-service, gere pedidos e suba de novo: as mensagens esperaram na fila?
+- [ ] Derrube o `shipping-worker`, confirme pedidos e suba de novo: o consumer retomou do offset onde parou? (compare com o RabbitMQ do exercício anterior)
+
+> Na [fase 8](#fase-8--terraform-infra-como-código) você vai recriar os passos 1–5 (cluster, ingress, Strimzi, RabbitMQ Operator, metrics-server) com Terraform. Faça a versão manual primeiro: é ela que dá sentido ao código.
 
 ---
 
-## 11. Roadmap em fases
+## 11. Terraform (infra como código)
+
+Na seção 10 você montou a plataforma (cluster, ingress, operators, tópicos, filas) rodando comandos e aplicando YAML na mão. Aqui você descreve **a mesma plataforma como código**, para destruir e recriar tudo com dois comandos. Continua local, no `kind`, sem custo.
+
+### 11.1 Escopo: o que é Terraform e o que fica em `k8s/`
+
+| Camada | Ferramenta | Por quê |
+|---|---|---|
+| **Plataforma:** cluster kind, ingress-nginx, Strimzi, RabbitMQ Operators, metrics-server, namespace, `Kafka`, `KafkaTopic`, `RabbitmqCluster`, `Exchange`/`Queue`/`Binding` | **Terraform** | Muda pouco, tem dependências entre si (operator antes do recurso) e se beneficia de `plan` e `destroy` |
+| **Apps:** Deployments, Services, ConfigMaps, Ingress dos 5 serviços | **YAML em `k8s/`** (`kubectl apply -k`) | Muda a cada release; o ciclo build → load → apply é do dia a dia de quem desenvolve |
+
+> Não é obrigatório separar assim. Terraform consegue aplicar Deployments também, mas você perderia o que a seção 10 ensina (YAML, `kubectl`, rolling update) e misturaria o ritmo de mudança de infra e de app.
+
+### 11.2 Conceitos que você vai usar
+
+| Conceito | Para quê |
+|---|---|
+| **Provider** | Plugin que fala com uma API (kind, Helm, Kubernetes). Versão travada em `versions.tf` |
+| **Resource / Data source** | Cria e gerencia algo / só lê algo que já existe |
+| **Variable / Output / Locals** | Entrada, saída e valores calculados do módulo |
+| **State** | Arquivo onde o Terraform guarda o que criou. É ele que permite o `plan` comparar. **Nunca edite na mão; não commite** (`.gitignore`) |
+| **`plan` / `apply` / `destroy`** | Mostra a diferença, aplica, remove tudo |
+| **Módulo** | Pasta com `.tf` reutilizável, chamada com `module "x" { source = ... }` |
+| **`for_each`** | Uma instância do recurso por item de uma lista/mapa (um `KafkaTopic` por tópico) |
+| **`depends_on`** | Dependência que o Terraform não consegue inferir (operator antes dos recursos do operator) |
+| **Drift** | Diferença entre o state e o que existe de fato (alguém mexeu na mão) |
+| **`terraform test`** | Testes em `*.tftest.hcl`, com `command = plan` (sem criar nada) e `mock_provider` |
+
+### 11.3 O que provisionar
+
+| Módulo | Providers | Recursos |
+|---|---|---|
+| `cluster` | `tehcyx/kind` | `kind_cluster` com portas 80/443 expostas para o ingress |
+| `cluster` (continuação) | `hashicorp/helm`, `hashicorp/kubernetes` | `kubernetes_namespace` (`shopflow`), `helm_release` de `ingress-nginx`, `metrics-server`, Strimzi, RabbitMQ Cluster Operator e Messaging Topology Operator |
+| `messaging` | `hashicorp/kubernetes` | `kubernetes_manifest` de `Kafka` (KRaft, com `KafkaNodePool`), um `KafkaTopic` por item da lista da [seção 3.2](#32-tópicos-kafka) via `for_each`, `RabbitmqCluster`, e `Exchange` / `Queue` / `Binding` da [seção 3.3](#33-rabbitmq) (incluindo a DLX) |
+| `database` | `hashicorp/kubernetes` | `StatefulSet` + PVC + Service do Postgres, `Secret` com as senhas (valores vindos de `variable` com `sensitive = true`) e as 4 databases |
+
+Os tópicos ficam numa lista única:
+
+```hcl
+locals {
+  topics = [
+    "order.created", "stock.reserved", "stock.failed", "payment.approved",
+    "payment.rejected", "order.confirmed", "order.cancelled", "shipment.dispatched",
+  ]
+}
+```
+
+Adicionar um tópico = adicionar uma string e rodar `terraform apply`.
+
+> **Pegadinha clássica:** `kubernetes_manifest` precisa que a CRD já exista **no `plan`**. Se o operator for instalado no mesmo `apply`, o plan falha. Resolva separando em duas etapas (`terraform apply -target=module.cluster` e depois o resto) ou em duas pastas/states (`terraform/platform` e `terraform/messaging`). Entender por que isso acontece é parte do exercício.
+
+### 11.4 Estrutura
+
+```
+terraform/
+├── versions.tf              # required_version e required_providers (versões travadas)
+├── main.tf                  # chama os módulos
+├── variables.tf             # cluster_name, postgres_password (sensitive), ...
+├── outputs.tf               # kubeconfig_path, ingress_url
+├── terraform.tfvars         # valores locais (NÃO commite segredos)
+├── modules/
+│   ├── cluster/
+│   ├── messaging/
+│   └── database/
+└── tests/
+    └── messaging.tftest.hcl # topics e DLX, com mock_provider
+```
+
+Comandos: `terraform init` · `terraform fmt -recursive` · `terraform validate` · `terraform plan` · `terraform apply` · `terraform destroy` · `terraform test`
+
+### 11.5 Exercícios de Terraform
+
+- [ ] `terraform destroy` e depois `terraform apply`: cluster, operators, tópicos e filas voltam sozinhos? Quanto tempo leva?
+- [ ] **Drift:** apague um `KafkaTopic` com `kubectl delete` e rode `terraform plan`. O que ele propõe?
+- [ ] Adicione um tópico novo só mexendo em `locals.topics` e leia o `plan` antes de aplicar.
+- [ ] Reaproveite o módulo `messaging` com outro `cluster_name`/namespace (ex.: `shopflow-staging`) sem copiar código.
+- [ ] Escreva o `terraform test` que falha se algum tópico da lista sumir, ou se a fila `notifications.email` perder a DLX.
+- [ ] Rode `terraform state list` e `terraform state show` e identifique o que o state guarda. Por que ele não pode ir para o git?
+
+---
+
+## 12. Roadmap em fases
 
 Cada fase tem um "pronto quando". Não avance sem fechar a anterior.
+As tasks de cada fase, com dependências e critérios, estão em [`backlog/`](./backlog/README.md).
 
 ### Fase 0 — Fundamentos e infra (1–2 dias)
 - [ ] Ler as seções 2–6 deste guia
@@ -790,35 +1002,55 @@ Cada fase tem um "pronto quando". Não avance sem fechar a anterior.
 
 **Pronto quando:** pedido confirmado gera log de e-mail; `to` com `@fail.com` termina na DLQ após 3 tentativas.
 
-### Fase 5 — Containers
-- [ ] Dockerfile **multi-stage** para cada serviço (build → imagem final pequena; Go em `distroless`/`scratch`)
-- [ ] Rodar o sistema todo pelo compose (serviços + infra)
+### Fase 5 — shipping-service (Laravel)
+- [ ] Criar o projeto e montar a árvore da seção 7.5
+- [ ] TDD do domínio: `TrackingCode`, `ShipmentStatus`, `Shipment` (backlog da seção 8)
+- [ ] TDD dos use cases `CreateShipment`, `DispatchShipment`, `DeliverShipment` com repo **em memória** e publisher/sender **fakes**
+- [ ] Controller + validação, repositório Eloquent (convertendo `ShipmentModel` ↔ entidade) + teste de integração
+- [ ] No order: incluir `customerEmail` no payload de `order.confirmed`
+- [ ] Comando `shipping:consume-orders` (consumer Kafka de `order.confirmed`, idempotente por `eventId`)
+- [ ] `KafkaEventPublisher` (`shipment.dispatched`) e `RabbitMqNotificationSender` (`order-shipped`); no notification, aceitar o template novo
+
+**Pronto quando:** um pedido confirmado gera um `Shipment`; `PATCH /shipments/{id}/dispatch` publica `shipment.dispatched` no Kafka e o e-mail `order-shipped` aparece no log do notification.
+
+### Fase 6 — Containers
+- [ ] Dockerfile **multi-stage** para cada serviço (build → imagem final pequena; Go em `distroless`/`scratch`; Laravel com `composer install --no-dev` e `ext-rdkafka`)
+- [ ] Rodar o sistema todo pelo compose (serviços + infra); o shipping sobe em dois containers da mesma imagem (web e worker)
 - [ ] Health checks em todos
 
-**Pronto quando:** `docker compose up` sobe os 4 serviços e o fluxo da fase 3 funciona.
+**Pronto quando:** `docker compose up` sobe os 5 serviços e os fluxos das fases 3 e 5 funcionam.
 
-### Fase 6 — Kubernetes
-- [ ] Seção 10 inteira
+### Fase 7 — Kubernetes
+- [ ] Seção 10 inteira (incluindo `shipping-web` e `shipping-worker`)
 - [ ] Exercícios da seção 10.3
 
 **Pronto quando:** o fluxo completo funciona chamando o Ingress e você consegue escalar o catalog.
 
-### Fase 7 — Extras (escolha)
+### Fase 8 — Terraform (infra como código)
+- [ ] Seção 11 inteira: módulos `cluster`, `messaging` e `database`
+- [ ] Tópicos Kafka com `for_each`; exchange, filas e DLX do RabbitMQ como recursos
+- [ ] `terraform fmt`, `validate` e `terraform test` verdes
+- [ ] Exercícios da seção 11.5
+
+**Pronto quando:** `terraform apply` num ambiente limpo sobe cluster, operators, tópicos, filas e Postgres, e depois `kubectl apply -k k8s/` deixa o fluxo completo funcionando; `terraform plan` seguinte não mostra mudanças.
+
+### Fase 9 — Extras (escolha)
 - [ ] **Transactional Outbox:** salvar o evento na mesma transação do aggregate e publicar depois (resolve "salvou mas não publicou")
 - [ ] **Schema Registry** + Avro/Protobuf para os eventos
 - [ ] Order buscar o preço no catalog (gRPC ou réplica local via eventos `product.updated`)
 - [ ] **Observabilidade:** OpenTelemetry + Jaeger (trace atravessando Kafka), Prometheus + Grafana
 - [ ] **CI** (GitHub Actions): testes de cada serviço em paralelo
 - [ ] Kustomize ou Helm para os manifests
+- [ ] **Terraform em cloud** (EKS/AKS + banco gerenciado) reaproveitando os módulos da fase 8, com **remote state** (S3/Azure Storage) e `terraform plan` no CI
 - [ ] Trocar a saga coreografada por **orquestrada** e comparar
 
 ---
 
-## 12. Convenções
+## 13. Convenções
 
 | Item | Convenção |
 |---|---|
-| Nome de tópico | `<agregado>.<fato no passado>` → `order.created`, `payment.rejected` |
+| Nome de tópico | `<agregado>.<fato no passado>` → `order.created`, `payment.rejected`, `shipment.dispatched` |
 | Versão de evento | Campo `version`. Mudança **compatível** (adicionar campo opcional) mantém versão. Mudança incompatível → nova versão e período com as duas |
 | Chave Kafka | Sempre o `orderId` |
 | IDs | UUID v7 (ordenável por tempo) ou ULID |
@@ -826,19 +1058,22 @@ Cada fase tem um "pronto quando". Não avance sem fechar a anterior.
 | Dinheiro | Decimal (nunca `float` para somar dinheiro). No JSON, número com 2 casas |
 | Erros HTTP | `400` validação · `404` não encontrado · `409` conflito de estado · `422` regra de negócio violada |
 | Corpo de erro | `{ "error": "ORDER_NOT_FOUND", "message": "..." }` |
-| Commits | Conventional Commits: `feat(order): ...`, `test(catalog): ...`, `fix(payment): ...` |
+| Commits | Conventional Commits: `feat(order): ...`, `test(catalog): ...`, `fix(payment): ...`, `feat(shipping): ...`, `feat(infra): ...` |
+| Terraform | Versões de provider travadas; `terraform fmt` antes de commitar; **state e `*.tfvars` com segredo fora do git** |
 | Config | Sempre por variável de ambiente (12-factor) |
 | Testes manuais | Arquivo `.http` (extensão REST Client do VS Code) |
 
 ---
 
-## 13. Referências
+## 14. Referências
 
 **Frameworks e linguagens**
 - NestJS — https://docs.nestjs.com
 - FastAPI — https://fastapi.tiangolo.com
 - Spring Boot — https://docs.spring.io/spring-boot/
 - Go — https://go.dev/doc/ · Effective Go — https://go.dev/doc/effective_go
+- PHP — https://www.php.net/manual/pt_BR/ · Laravel — https://laravel.com/docs · Pest — https://pestphp.com
+- laravel-kafka — https://github.com/mateusjunges/laravel-kafka · php-amqplib — https://github.com/php-amqplib/php-amqplib
 
 **Mensageria**
 - Kafka — https://kafka.apache.org/documentation/
@@ -849,6 +1084,12 @@ Cada fase tem um "pronto quando". Não avance sem fechar a anterior.
 - kind — https://kind.sigs.k8s.io
 - Strimzi — https://strimzi.io/docs/
 - RabbitMQ Cluster Operator — https://www.rabbitmq.com/kubernetes/operator/operator-overview
+
+**Terraform**
+- Terraform — https://developer.hashicorp.com/terraform/docs · `terraform test` — https://developer.hashicorp.com/terraform/language/tests
+- Provider kind — https://registry.terraform.io/providers/tehcyx/kind/latest/docs
+- Provider Helm — https://registry.terraform.io/providers/hashicorp/helm/latest/docs
+- Provider Kubernetes — https://registry.terraform.io/providers/hashicorp/kubernetes/latest/docs
 
 **Testes**
 - Testcontainers — https://testcontainers.com (tem módulo para Node, Python, Java e Go)
