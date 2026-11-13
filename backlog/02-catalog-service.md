@@ -14,8 +14,8 @@ Referências gerais: guia 01 (seções 3, 4, 6, 7.2, 8) e guia 02 (seção 2, Py
 
 ### CAT-01 — Criar o projeto e a estrutura de pastas
 - **Tipo:** setup · **Fase:** 2 · **Depende de:** INF-01
-- **Contexto:** inicialize o projeto com `uv`, adicione FastAPI e as dependências de dev (pytest, pytest-asyncio, httpx, testcontainers, mypy, ruff). Monte a árvore da seção 7.2 com os `__init__.py` e configure `asyncio_mode` do pytest, ruff e mypy no `pyproject.toml`.
-- **Pronto quando:** `uv run fastapi dev app/main.py` sobe, `uv run pytest` roda, `uv run ruff check .` e `uv run mypy app` passam no projeto vazio.
+- **Contexto:** inicialize o projeto com `uv`, adicione FastAPI e as dependências de dev (pytest, pytest-asyncio, httpx, testcontainers, mypy, ruff). Monte a árvore da seção 7.2 com os `__init__.py` e configure `asyncio_mode` do pytest, ruff e mypy no `pyproject.toml`. O serviço é autocontido: crie dentro da pasta dele um `.gitignore` e um `.dockerignore` próprios, um `.env.example` com todas as variáveis e um `README.md` curto (como rodar, testar e buildar), sem depender de arquivos da raiz.
+- **Pronto quando:** `uv run fastapi dev app/main.py` sobe, `uv run pytest` roda, `uv run ruff check .` e `uv run mypy app` passam no projeto vazio. A pasta do serviço, copiada sozinha para outro lugar, roda, testa e builda sem arquivos de fora dela; existem `.gitignore`, `.dockerignore`, `.env.example` e `README.md` na pasta.
 - **Referência:** guia 01, seção 7.2; guia 02, seção 2 (ferramentas e comandos).
 
 ### CAT-02 — Configuração por env e `/health`
@@ -224,6 +224,6 @@ Referências gerais: guia 01 (seções 3, 4, 6, 7.2, 8) e guia 02 (seção 2, Py
 
 ### CAT-26 — Dockerfile multi-stage
 - **Tipo:** infra · **Fase:** 6 · **Depende de:** CAT-02
-- **Contexto:** estágio de build instala dependências com `uv` e estágio final copia só o ambiente e o código. Roda sem privilégios e inicia com `fastapi run`. Migrations rodam em passo separado (job ou entrypoint explícito), decida e documente.
+- **Contexto:** estágio de build instala dependências com `uv` e estágio final copia só o ambiente e o código. Roda sem privilégios e inicia com `fastapi run`. Migrations rodam em passo separado (job ou entrypoint explícito), decida e documente. O contexto de build é a pasta do serviço (o `Dockerfile` fica nela e nada é copiado de fora), para que `docker build` funcione de dentro dela.
 - **Pronto quando:** a imagem sobe e responde `/health`; é bem menor que a de build; configuração só por env.
 - **Referência:** guia 01, seção 12 (fase 6); guia 02, seção 2 (ferramentas).

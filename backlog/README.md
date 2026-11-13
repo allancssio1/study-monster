@@ -35,6 +35,7 @@ IDs: `<PREFIXO>-E<n>` é épico e `<PREFIXO>-<nn>` é task. A numeração das ta
 3. **Uma fase só fecha** quando as tasks de validação dela (`exercise`) passam. Não avance antes.
 4. **Marque** `[x]` nos checklists de progresso de cada épico conforme termina.
 5. Commits seguem a convenção da seção 13 do guia 01 (`feat(order): ...`, `test(catalog): ...`).
+6. **Cada serviço é autocontido:** nenhum serviço importa código de outra pasta, e cada um tem o próprio `.gitignore`, `.dockerignore`, `.env.example` e `README.md`. Configuração só por variável de ambiente. Contratos entre serviços (envelope, tópicos, filas) existem só como documentação, nunca como código compartilhado; se dois serviços precisam do mesmo formato, cada um implementa o seu. A raiz do repositório (guias, `backlog/`, `infra/`, `k8s/`, `terraform/`) é só conveniência e poderia ser dividida em repositórios sem alterar nenhum serviço.
 
 ## Ordem de execução por fase
 

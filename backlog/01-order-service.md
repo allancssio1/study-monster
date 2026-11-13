@@ -16,8 +16,8 @@ Projeto Nest rodando, com a estrutura de pastas da seção 7.1 e configuração 
 
 ### ORD-01 — Criar o projeto e a estrutura de pastas
 - **Tipo:** setup · **Fase:** 1 · **Depende de:** INF-01
-- **Contexto:** gere o projeto com o CLI do Nest, ligue o `strict` do TypeScript e monte as pastas `shared/` e `modules/orders/{domain,application,infra,presentation}` mais `test/{unit,integration,e2e}`. Decida o runner de testes (Jest padrão do Nest) e o gerenciador de pacotes.
-- **Pronto quando:** `npm run start:dev` sobe sem erro, `npm test` roda (pode ter só um teste de exemplo que você apaga depois) e a árvore de pastas bate com a seção 7.1.
+- **Contexto:** gere o projeto com o CLI do Nest, ligue o `strict` do TypeScript e monte as pastas `shared/` e `modules/orders/{domain,application,infra,presentation}` mais `test/{unit,integration,e2e}`. Decida o runner de testes (Jest padrão do Nest) e o gerenciador de pacotes. O serviço é autocontido: crie dentro da pasta dele um `.gitignore` e um `.dockerignore` próprios, um `.env.example` com todas as variáveis e um `README.md` curto (como rodar, testar e buildar), sem depender de arquivos da raiz.
+- **Pronto quando:** `npm run start:dev` sobe sem erro, `npm test` roda (pode ter só um teste de exemplo que você apaga depois) e a árvore de pastas bate com a seção 7.1. A pasta do serviço, copiada sozinha para outro lugar, roda, testa e builda sem arquivos de fora dela; existem `.gitignore`, `.dockerignore`, `.env.example` e `README.md` na pasta.
 - **Referência:** guia 01, seção 7.1; guia 02, seção 1 (arquivo principal e ferramentas).
 
 ### ORD-02 — Configuração por env e endpoint `/health`
@@ -300,6 +300,6 @@ Enviar o comando de e-mail para o notification-service.
 
 ### ORD-34 — Dockerfile multi-stage
 - **Tipo:** infra · **Fase:** 6 · **Depende de:** ORD-02
-- **Contexto:** estágio de build com dependências completas e estágio final só com o necessário para rodar (build compilado, dependências de produção, usuário sem privilégio). Sem segredos na imagem; configuração só por env. Defina um `HEALTHCHECK` ou deixe para o compose.
+- **Contexto:** estágio de build com dependências completas e estágio final só com o necessário para rodar (build compilado, dependências de produção, usuário sem privilégio). Sem segredos na imagem; configuração só por env. Defina um `HEALTHCHECK` ou deixe para o compose. O contexto de build é a pasta do serviço (o `Dockerfile` fica nela e nada é copiado de fora), para que `docker build` funcione de dentro dela.
 - **Pronto quando:** `docker build` gera a imagem, e ela sobe e responde `/health`; o tamanho final é bem menor que o do estágio de build; o `.dockerignore` evita copiar `node_modules`.
 - **Referência:** guia 01, seção 12 (fase 6).
