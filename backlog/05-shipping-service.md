@@ -19,8 +19,8 @@ Pontos de atenção deste serviço:
 
 ### SHP-01 — Criar o projeto e a estrutura de módulos
 - **Tipo:** setup · **Fase:** 5 · **Depende de:** INF-01
-- **Contexto:** crie o projeto com Composer, habilite as rotas de API, instale Pest e Pint e monte `app/Modules/Shipping/{Domain,Application,Infra,Presentation}` e `app/Shared/Domain` conforme a seção 7.5. Garanta que o autoload PSR-4 cobre o novo namespace e que `declare(strict_types=1)` é seu padrão.
-- **Pronto quando:** `php artisan serve --port=8082` sobe, `./vendor/bin/pest` roda (com um teste de exemplo que você pode apagar) e `./vendor/bin/pint --test` passa; a árvore bate com a seção 7.5.
+- **Contexto:** crie o projeto com Composer, habilite as rotas de API, instale Pest e Pint e monte `app/Modules/Shipping/{Domain,Application,Infra,Presentation}` e `app/Shared/Domain` conforme a seção 7.5. Garanta que o autoload PSR-4 cobre o novo namespace e que `declare(strict_types=1)` é seu padrão. O serviço é autocontido: crie dentro da pasta dele um `.gitignore` e um `.dockerignore` próprios, um `.env.example` com todas as variáveis e um `README.md` curto (como rodar, testar e buildar), sem depender de arquivos da raiz.
+- **Pronto quando:** `php artisan serve --port=8082` sobe, `./vendor/bin/pest` roda (com um teste de exemplo que você pode apagar) e `./vendor/bin/pint --test` passa; a árvore bate com a seção 7.5. A pasta do serviço, copiada sozinha para outro lugar, roda, testa e builda sem arquivos de fora dela; existem `.gitignore`, `.dockerignore`, `.env.example` e `README.md` na pasta.
 - **Referência:** guia 01, seção 7.5; guia 02, seção 5 (ferramentas e módulos).
 
 ### SHP-02 — Rotas de API, `/health` e configuração
@@ -235,6 +235,6 @@ Pontos de atenção deste serviço:
 
 ### SHP-26 — Dockerfile multi-stage
 - **Tipo:** infra · **Fase:** 6 · **Depende de:** SHP-02, SHP-21
-- **Contexto:** a mesma imagem serve a API e o worker, mudando só o comando de inicialização. A imagem precisa de PHP-FPM ou servidor embutido, da extensão `rdkafka`, do `pcntl` (sinais) e das dependências de produção do Composer (sem dev). Otimize autoload e caches de configuração no build. Rode sem privilégios.
+- **Contexto:** a mesma imagem serve a API e o worker, mudando só o comando de inicialização. A imagem precisa de PHP-FPM ou servidor embutido, da extensão `rdkafka`, do `pcntl` (sinais) e das dependências de produção do Composer (sem dev). Otimize autoload e caches de configuração no build. Rode sem privilégios. O contexto de build é a pasta do serviço (o `Dockerfile` fica nela e nada é copiado de fora), para que `docker build` funcione de dentro dela.
 - **Pronto quando:** a imagem sobe como API (`/health` 200) e, com outro comando, como worker (aparece no consumer group); a imagem final não tem ferramentas de dev; configuração só por env.
 - **Referência:** guia 01, seções 7.5 e 12 (fase 6).

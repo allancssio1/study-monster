@@ -14,8 +14,8 @@ Referências gerais: guia 01 (seções 3, 4, 6, 7.3, 8) e guia 02 (seção 3, Ja
 
 ### PAY-01 — Criar o projeto e a estrutura de pacotes
 - **Tipo:** setup · **Fase:** 3 · **Depende de:** INF-01
-- **Contexto:** gere o projeto no start.spring.io (Java 21, Maven, dependências: Web, Validation, Data JPA, PostgreSQL, Spring for Apache Kafka, Actuator, Flyway, Testcontainers). Monte os pacotes da seção 7.3 (`domain`, `application`, `infra`, `presentation`) lembrando que pacote Java não aceita hífen.
-- **Pronto quando:** `./mvnw spring-boot:run` sobe (mesmo sem banco, se necessário desligando a auto-configuração temporariamente) e `./mvnw test` roda; a estrutura de pastas bate com a seção 7.3.
+- **Contexto:** gere o projeto no start.spring.io (Java 21, Maven, dependências: Web, Validation, Data JPA, PostgreSQL, Spring for Apache Kafka, Actuator, Flyway, Testcontainers). Monte os pacotes da seção 7.3 (`domain`, `application`, `infra`, `presentation`) lembrando que pacote Java não aceita hífen. O serviço é autocontido: crie dentro da pasta dele um `.gitignore` e um `.dockerignore` próprios, um `.env.example` com todas as variáveis e um `README.md` curto (como rodar, testar e buildar), sem depender de arquivos da raiz.
+- **Pronto quando:** `./mvnw spring-boot:run` sobe (mesmo sem banco, se necessário desligando a auto-configuração temporariamente) e `./mvnw test` roda; a estrutura de pastas bate com a seção 7.3. A pasta do serviço, copiada sozinha para outro lugar, roda, testa e builda sem arquivos de fora dela; existem `.gitignore`, `.dockerignore`, `.env.example` e `README.md` na pasta.
 - **Referência:** guia 01, seção 7.3; guia 02, seção 3 (ferramentas e comandos).
 
 ### PAY-02 — Configuração e health
@@ -175,6 +175,6 @@ Referências gerais: guia 01 (seções 3, 4, 6, 7.3, 8) e guia 02 (seção 3, Ja
 
 ### PAY-19 — Dockerfile multi-stage
 - **Tipo:** infra · **Fase:** 6 · **Depende de:** PAY-02
-- **Contexto:** estágio de build com JDK gerando o jar e estágio final só com o JRE. Ajuste memória da JVM para container, rode sem privilégios e use o Actuator como health check. Avalie `spring-boot:build-image` como comparação.
+- **Contexto:** estágio de build com JDK gerando o jar e estágio final só com o JRE. Ajuste memória da JVM para container, rode sem privilégios e use o Actuator como health check. Avalie `spring-boot:build-image` como comparação. O contexto de build é a pasta do serviço (o `Dockerfile` fica nela e nada é copiado de fora), para que `docker build` funcione de dentro dela.
 - **Pronto quando:** a imagem sobe e `/actuator/health` responde 200; configuração só por env; a imagem final não tem o JDK nem o código-fonte.
 - **Referência:** guia 01, seção 12 (fase 6); guia 02, seção 3 (ferramentas e comandos).

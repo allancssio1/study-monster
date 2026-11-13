@@ -9,7 +9,7 @@ Referência geral: seção 9 do guia 01. Serviço de apoio: não tem linguagem, 
 Subir Postgres, Kafka, Kafka UI e RabbitMQ com um comando e **entender** como Kafka e RabbitMQ se comportam antes de escrever qualquer serviço.
 
 **Progresso:**
-- [ ] INF-01 Preparar o monorepo
+- [ ] INF-01 Preparar o repositório de estudo
 - [ ] INF-02 Postgres com as 4 databases
 - [ ] INF-03 Kafka em modo KRaft
 - [ ] INF-04 Kafka UI
@@ -18,9 +18,9 @@ Subir Postgres, Kafka, Kafka UI e RabbitMQ com um comando e **entender** como Ka
 - [ ] INF-07 Exercício manual: consumer groups no Kafka
 - [ ] INF-08 Exercício manual: exchange, filas e DLQ no RabbitMQ
 
-### INF-01 — Preparar o monorepo
+### INF-01 — Preparar o repositório de estudo
 - **Tipo:** setup · **Fase:** 0 · **Depende de:** —
-- **Contexto:** o repositório já existe com os guias. Crie a pasta `infra/` e prepare o `.gitignore` da raiz cobrindo os cinco ecossistemas (Node, Python, Java, Go, PHP) e Terraform (state, `.terraform/`, `*.tfvars` com segredo). Deixe a convenção de commits anotada.
+- **Contexto:** o repositório já existe com os guias. Aqui ele só agrupa os serviços por conveniência: cada serviço é autocontido e poderia ir para um repositório próprio sem ajustes. Crie a pasta `infra/` (ambiente local compartilhado) e prepare o `.gitignore` da raiz cobrindo os cinco ecossistemas (Node, Python, Java, Go, PHP) e Terraform (state, `.terraform/`, `*.tfvars` com segredo). Deixe a convenção de commits anotada.
 - **Pronto quando:** `git status` não lista `node_modules`, `.venv`, `target`, `vendor`, `.terraform` nem `*.tfstate` depois que você criar projetos de exemplo temporários; `infra/` existe.
 - **Referência:** guia 01, seções 7.6 e 13.
 

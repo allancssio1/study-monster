@@ -1,0 +1,14 @@
+**/node_modules
+**/.env
+**/.venv
+**/target
+**/vendor
+**/.terraform
+**/*.tfstate*
+**/*.tfvars*
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/build/
+**/.gradle/
+**/.idea/

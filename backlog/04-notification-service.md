@@ -14,8 +14,8 @@ Referências gerais: guia 01 (seções 3.3, 4, 7.4, 8) e guia 02 (seção 4, Go)
 
 ### NOT-01 — Criar o módulo e a estrutura de pastas
 - **Tipo:** setup · **Fase:** 4 · **Depende de:** INF-01
-- **Contexto:** `go mod init` com o caminho do módulo, árvore da seção 7.4 (`cmd/notification`, `internal/config`, `internal/notification/{domain,application,infra,presentation}`) e um `main.go` mínimo. Em Go os testes ficam ao lado do código.
-- **Pronto quando:** `go run ./cmd/notification` compila e termina sem erro; `go vet ./...` e `go test ./...` passam; `gofmt` não aponta diferenças.
+- **Contexto:** `go mod init` com o caminho do módulo, árvore da seção 7.4 (`cmd/notification`, `internal/config`, `internal/notification/{domain,application,infra,presentation}`) e um `main.go` mínimo. Em Go os testes ficam ao lado do código. O serviço é autocontido: crie dentro da pasta dele um `.gitignore` e um `.dockerignore` próprios, um `.env.example` com todas as variáveis e um `README.md` curto (como rodar, testar e buildar), sem depender de arquivos da raiz.
+- **Pronto quando:** `go run ./cmd/notification` compila e termina sem erro; `go vet ./...` e `go test ./...` passam; `gofmt` não aponta diferenças. A pasta do serviço, copiada sozinha para outro lugar, roda, testa e builda sem arquivos de fora dela; existem `.gitignore`, `.dockerignore`, `.env.example` e `README.md` na pasta.
 - **Referência:** guia 01, seção 7.4; guia 02, seção 4 (arquivo principal e ferramentas).
 
 ### NOT-02 — Configuração e `/health`
@@ -122,6 +122,6 @@ Referências gerais: guia 01 (seções 3.3, 4, 7.4, 8) e guia 02 (seção 4, Go)
 
 ### NOT-14 — Dockerfile multi-stage
 - **Tipo:** infra · **Fase:** 6 · **Depende de:** NOT-02
-- **Contexto:** estágio de build compilando um binário estático e estágio final em `distroless` (ou `scratch`) rodando sem privilégios. Como a imagem não tem shell, o health check é feito pelo orquestrador via HTTP.
+- **Contexto:** estágio de build compilando um binário estático e estágio final em `distroless` (ou `scratch`) rodando sem privilégios. Como a imagem não tem shell, o health check é feito pelo orquestrador via HTTP. O contexto de build é a pasta do serviço (o `Dockerfile` fica nela e nada é copiado de fora), para que `docker build` funcione de dentro dela.
 - **Pronto quando:** a imagem sobe, responde `/health` e tem poucas dezenas de MB; recebe `SIGTERM` e encerra com elegância (consumer parando) em vez de ser morta.
 - **Referência:** guia 01, seção 12 (fase 6); guia 02, seção 4 (ferramentas).
